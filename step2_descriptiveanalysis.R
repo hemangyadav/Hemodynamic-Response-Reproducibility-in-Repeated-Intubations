@@ -173,9 +173,7 @@ icc_raw_adj <- lmer(MAP_bin_0.5 ~
                       Baseline_MAP +
                       SOFA + AGE_AT_ADMISSION + PATIENT_SEX + 
                       HOSPITAL_ADMISSION_WEIGHT_KG +
-                      EJECTION_FRACTION_THREE_MONTHS + ef_missing +
                       HTN + CKD + CHF +
-                      IntubationNumber +
                       (1 | StudyID),
                     data = paired_cohort)
 
@@ -186,9 +184,7 @@ icc_eff_adj <- lmer(EffectiveMAP_bin_0.5 ~
                       Baseline_EffMAP +
                       SOFA + AGE_AT_ADMISSION + PATIENT_SEX + 
                       HOSPITAL_ADMISSION_WEIGHT_KG +
-                      EJECTION_FRACTION_THREE_MONTHS + ef_missing +
                       HTN + CKD + CHF +
-                      IntubationNumber +
                       (1 | StudyID),
                     data = paired_cohort)
 
@@ -245,9 +241,7 @@ if("HoursBetweenIntubations" %in% names(paired_cohort)) {
                         Baseline_EffMAP +
                         SOFA + AGE_AT_ADMISSION + PATIENT_SEX + 
                         HOSPITAL_ADMISSION_WEIGHT_KG +
-                        EJECTION_FRACTION_THREE_MONTHS + ef_missing +
                         HTN + CKD + CHF +
-                        IntubationNumber +
                         (1 | StudyID),
                       data = subset_data)
         
@@ -298,8 +292,7 @@ for(tp in c("0.5", "1", "1.5")) {
     # Adjusted ICC
     formula_adj <- as.formula(paste0(outcome_col, " ~ Baseline_EffMAP + SOFA + AGE_AT_ADMISSION + ",
                                      "PATIENT_SEX + HOSPITAL_ADMISSION_WEIGHT_KG + ",
-                                     "EJECTION_FRACTION_THREE_MONTHS + ef_missing + ",
-                                     "HTN + CKD + CHF + IntubationNumber + (1 | StudyID)"))
+                                     "HTN + CKD + CHF + (1 | StudyID)"))
     model_adj <- lmer(formula_adj, data = paired_cohort, REML = TRUE)
     icc_adj <- performance::icc(model_adj)
     
@@ -347,4 +340,3 @@ cat(sprintf("  - Unadjusted Raw MAP ICC: %.3f\n", icc_raw_value$ICC_adjusted))
 cat(sprintf("  - Unadjusted Effective MAP ICC: %.3f\n", icc_eff_value$ICC_adjusted))
 cat(sprintf("  - Adjusted Raw MAP ICC: %.3f\n", icc_raw_adj_value$ICC_adjusted))
 cat(sprintf("  - Adjusted Effective MAP ICC: %.3f\n", icc_eff_adj_value$ICC_adjusted))
-
