@@ -1,20 +1,27 @@
 library(pacman)
 p_load(tidyverse, data.table, lme4, performance, broom.mixed, lmerTest)
 
-# Load the analysis results ------------
+#===============================================================================
+# EXPORT MODEL COEFFICIENTS & CALCULATE ICC CONFIDENCE INTERVALS
+#===============================================================================
+
+# Load the analysis results
 icc_results <- readRDS("icc_analysis_results.rds")
 paired_cohort <- readRDS("cleaned_datasets.rds")$paired_cohort
 
-# 1. Fit revised model and extract coefficients -------------
-cat("1. Fitting revised model (without CHF and IntubationNumber)...\n")
+cat("\n=== EXPORTING MODEL COEFFICIENTS ===\n")
+cat("NOTE: This analysis uses Model 3 - CHF only (no EF/ef_missing, no IntubationNumber)\n")
+cat("      Based on VIF analysis: CHF is stronger predictor, best AIC\n\n")
+
+#--- 1. Fit Model 3 and extract coefficients ----
+cat("1. Fitting Model 3 (CHF only)...\n")
 
 # Fit model with lmerTest for p-values
 model_revised <- lmerTest::lmer(EffectiveMAP_bin_0.5 ~ 
                                   Baseline_EffMAP +
                                   SOFA + AGE_AT_ADMISSION + PATIENT_SEX + 
                                   HOSPITAL_ADMISSION_WEIGHT_KG +
-                                  EJECTION_FRACTION_THREE_MONTHS + ef_missing +
-                                  HTN + CKD + 
+                                  HTN + CKD + CHF +
                                   (1 | StudyID),
                                 data = paired_cohort)
 
@@ -22,7 +29,7 @@ model_revised <- lmerTest::lmer(EffectiveMAP_bin_0.5 ~
 fixed_effects <- broom.mixed::tidy(model_revised, effects = "fixed", conf.int = TRUE, conf.level = 0.95)
 setDT(fixed_effects)
 
-# Clean up variable names 
+# Clean up variable names - MUST MATCH MODEL EXACTLY (8 predictors)
 fixed_effects[, Variable := c(
   "Intercept",
   "Baseline Effective MAP (per mmHg)",
@@ -30,10 +37,9 @@ fixed_effects[, Variable := c(
   "Age (per year)",
   "Male Sex",
   "Weight (per kg)",
-  "Ejection Fraction (per %)",
-  "Missing Ejection Fraction",
   "Hypertension",
-  "Chronic Kidney Disease"
+  "Chronic Kidney Disease",
+  "Congestive Heart Failure"
 )]
 
 # Format table
@@ -49,8 +55,9 @@ model_table <- fixed_effects[, .(
 
 print(model_table)
 fwrite(model_table, "Table3_Adjusted_Model_Coefficients.csv")
+cat("   Saved: Table3_Adjusted_Model_Coefficients.csv\n")
 
-# 2. Extract random effects ------------
+#--- 2. Extract random effects ----
 cat("\n2. Extracting random effects variance components...\n")
 
 vc <- as.data.frame(VarCorr(model_revised))
@@ -73,18 +80,35 @@ random_effects <- data.table(
 
 print(random_effects)
 fwrite(random_effects, "Table3_Random_Effects.csv")
+cat("   Saved: Table3_Random_Effects.csv\n")
 
-# 3. ICCs ---------
-# Get complete cases for all three timepoints
+library(pacman)
+p_load(data.table, lme4, lmerTest, broom.mixed)
+
+
+library(pacman)
+p_load(data.table, lme4, pbkrtest)
+
+
+# ICCs ---------
+library(pacman)
+p_load(data.table, lme4, lmerTest)
+
+# Load data
+paired_cohort <- readRDS("cleaned_datasets.rds")$paired_cohort
+
+# Get complete cases for all three timepoints (Model 3: CHF only)
 complete_data <- paired_cohort[complete.cases(paired_cohort[, .(
   EffectiveMAP_bin_0.5, EffectiveMAP_bin_1, EffectiveMAP_bin_1.5,
   Baseline_EffMAP, SOFA, AGE_AT_ADMISSION, PATIENT_SEX, 
-  HOSPITAL_ADMISSION_WEIGHT_KG, EJECTION_FRACTION_THREE_MONTHS,
-  ef_missing, HTN, CKD, StudyID
+  HOSPITAL_ADMISSION_WEIGHT_KG, HTN, CKD, CHF, StudyID
 )])]
 
-# Refactor StudyID to drop unused levels
+# CRITICAL: Refactor StudyID to drop unused levels
 complete_data$StudyID <- factor(complete_data$StudyID)
+
+cat(sprintf("Sample size: %d observations from %d patients\n\n", 
+            nrow(complete_data), nlevels(complete_data$StudyID)))
 
 results <- data.table()
 
@@ -93,7 +117,7 @@ for(tp in c("0.5", "1", "1.5")) {
   
   formula_str <- paste0(outcome_var, " ~ Baseline_EffMAP + SOFA + AGE_AT_ADMISSION + ",
                         "PATIENT_SEX + HOSPITAL_ADMISSION_WEIGHT_KG + ",
-                        "EJECTION_FRACTION_THREE_MONTHS + ef_missing + HTN + CKD + (1 | StudyID)")
+                        "HTN + CKD + CHF + (1 | StudyID)")
   
   model <- lmer(as.formula(formula_str), data = complete_data, REML = TRUE)
   
@@ -132,4 +156,5 @@ for(tp in c("0.5", "1", "1.5")) {
 
 print(results)
 fwrite(results, "ICC_Results.csv")
+cat("\nSaved: ICC_Results.csv\n")
 
